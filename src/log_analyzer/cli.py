@@ -1,8 +1,8 @@
 """Command-line entry point."""
 
+import argparse
 import os
 import sys
-import argparse
 from pathlib import Path
 
 from log_analyzer.analysis import DEFAULT_THRESHOLD, DEFAULT_WINDOW_SECONDS, analyze
@@ -12,9 +12,7 @@ from log_analyzer.loader import stream_entries
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Analyse de sécurité des logs")
     parser.add_argument("--input", required=True, help="Chemin vers le fichier de logs")
-    parser.add_argument(
-        "--output", default=None, help="Fichier JSON de sortie (stdout par défaut)"
-    )
+    parser.add_argument("--output", default=None, help="Fichier JSON de sortie (stdout par défaut)")
     parser.add_argument(
         "--window", type=int, default=DEFAULT_WINDOW_SECONDS, help="Fenêtre en secondes"
     )
