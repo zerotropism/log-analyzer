@@ -5,12 +5,14 @@ description = "connection logs analyzer in Python"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "fastmcp>=4,<5",
     "pydantic>=2.10",
 ]
 
 [project.scripts]
 log-analyzer = "log_analyzer.cli:main"
 log-analyzer-gen = "log_analyzer.synthetic:main"
+log-analyzer-mcp = "log_analyzer.server:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -19,5 +21,9 @@ build-backend = "hatchling.build"
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
     "ruff>=0.16.9",
 ]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
