@@ -15,6 +15,8 @@ output is deterministic — the same input always produces byte-identical JSON.
 - **JSON report**: typed with pydantic — the model is the output contract
 - **Robustness**: malformed lines are counted without interrupting the analysis
 - **Synthetic logs**: a seeded generator produces reproducible files, including bursts
+- **MCP server**: the same analysis exposed to MCP clients and LLM agents, confined to one
+  directory
 
 ## Expected Log Format
 
@@ -57,6 +59,37 @@ uv run log-analyzer --input /tmp/synthetic.log
 
 The same seed always yields the same file, which is what makes the tests reproducible.
 
+## MCP Server
+
+`log-analyzer-mcp` serves the same analysis over stdio, as a second adapter next to the CLI: both
+call one function and return the same `Report`.
+
+| Kind | Name | Returns |
+|---|---|---|
+| Tool | `analyze(path, window_seconds=300, threshold=5)` | the full report |
+| Tool | `logins_per_user(path)` | successful logins per user |
+| Tool | `ips_per_user(path)` | IP addresses per user |
+| Tool | `suspicious_sources(path, window_seconds=300, threshold=5)` | error bursts per (ip, user) |
+| Resource | `report://{path}` | the default report, as JSON |
+| Prompt | `investigate_source(ip_or_user, path)` | instructions to investigate one source with the tools |
+
+Every tool is read-only. The server reads only below `LOG_ANALYZER_ROOT` and refuses to start
+without it; a path that resolves outside, through `..`, an absolute path or a symlink, is
+refused. Each analysis runs in a worker thread and is cut off after `LOG_ANALYZER_TIMEOUT`
+seconds (30 by default).
+
+MCP clients forward only a short list of environment variables to a stdio server, so pass the
+root explicitly. With [mcp-servers-cli](https://pypi.org/project/mcp-servers-cli/):
+
+```bash
+mkdir -p /tmp/logs && uv run log-analyzer-gen --output /tmp/logs/synthetic.log --lines 5000 --seed 42
+uvx mcp-servers-cli call suspicious_sources '{"path": "synthetic.log"}' \
+  --env LOG_ANALYZER_ROOT=/tmp/logs --stdio "uv run --directory $PWD log-analyzer-mcp"
+uvx mcp-servers-cli agent "Which sources look suspicious in synthetic.log?" \
+  --model qwen3.5:4b-mlx \
+  --env LOG_ANALYZER_ROOT=/tmp/logs --stdio "uv run --directory $PWD log-analyzer-mcp"
+```
+
 ## Output Report Structure
 
 ```json
@@ -96,7 +129,8 @@ src/log_analyzer/
 ├── loader.py      # File streaming
 ├── analysis.py    # Single-pass aggregation and sliding-window burst detection
 ├── synthetic.py   # Seeded log generator
-└── cli.py         # Command-line entry point
+├── cli.py         # Command-line adapter
+└── server.py      # MCP adapter: tools, resource, prompt; root confinement and timeout
 input/             # Sample log file
 tests/             # pytest suite
 ```
@@ -115,8 +149,9 @@ uv run pytest
 | Package    | Role                          |
 |------------|-------------------------------|
 | `pydantic` | Report model and serialization |
+| `fastmcp`  | MCP server                     |
 
-`pytest` and `ruff` live in the `dev` dependency group.
+`pytest`, `pytest-asyncio` and `ruff` live in the `dev` dependency group.
 
 ## Detection semantics
 
